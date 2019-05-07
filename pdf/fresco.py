@@ -7,6 +7,9 @@ import re
 import time
 
 import random
+from slimit import ast 
+from slimit.parser import Parser 
+from slimit.visitors import nodevisitor 
 
 try:
     from urllib.parse import urlparse  # py3
@@ -106,6 +109,7 @@ class Crawler(object):
         htmls = []
         
         for index, url in enumerate(self.parse_menu(self.request(self.start_url))):
+            print(url)
             html = self.parse_body(self.request(url))
             f_name = ".".join([str(index), "html"])
             with open(f_name, 'wb') as f:
@@ -131,14 +135,24 @@ class LiaoxuefengPythonCrawler(Crawler):
         :return: url生成器
         """
         soup = BeautifulSoup(response.content, "html.parser")
-        menu_tag = soup.find_all(class_="uk-nav uk-nav-side")[3]
-        for li in menu_tag.find_all("li"):
-            if li.a == None:
-                continue
-            url = li.a.get("href")
-            if not url.startswith("http"):
-                url = "".join([self.domain, url])  # 补全为全路径
-            yield url
+        script = soup.find("script", text=lambda text: text and "var docnavData" in text) 
+
+        # parse js 
+        parser = Parser() 
+        tree = parser.parse(script.text) 
+        for node in nodevisitor.visit(tree): 
+            if isinstance(node, ast.VarDecl) and node.identifier.value == 'docnavData': 
+                print("hellllllllllo")
+                for group in node.initializer:
+                    a = group.properties[1]
+                    r = a.right
+                    its = r.items
+                    for it in its:
+                        url = it.properties[0].right
+                        val = url.value
+                        print(val)
+                        yield val[1:-1]
+
 
     def parse_body(self, response):
         """
@@ -148,10 +162,11 @@ class LiaoxuefengPythonCrawler(Crawler):
         """
         try:
             soup = BeautifulSoup(response.content, 'html.parser')
-            body = soup.find_all(class_="x-wiki-content")[0]
-
+            
+            body = soup.find_all(class_="mainContainer documentContainer postContainer")[0]
+            #print(body)
             # 加入标题, 居中显示
-            title = soup.find('h4').get_text()
+            title = soup.find('h1').get_text()
             center_tag = soup.new_tag("center")
             title_tag = soup.new_tag('h1')
             title_tag.string = title
@@ -178,6 +193,6 @@ class LiaoxuefengPythonCrawler(Crawler):
 
 
 if __name__ == '__main__':
-    start_url = "http://www.liaoxuefeng.com/wiki/0013739516305929606dd18361248578c67b8067c8c017b000"
-    crawler = LiaoxuefengPythonCrawler("廖雪峰Git", start_url)
+    start_url = "https://frescolib.org/docs/index.html"
+    crawler = LiaoxuefengPythonCrawler("Fresco Docs", start_url)
     crawler.run()
